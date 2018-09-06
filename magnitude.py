@@ -2,6 +2,7 @@ import os
 import time
 import numpy
 import obspy
+import scipy.signal as signal
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -9,11 +10,14 @@ warnings.filterwarnings("ignore")
 metadata = './events.csv'
 earthquake_data = './earthquakes_db'
 
+N = 1000
+FEATURES = 257
 dataset = list()
 
 checkpoint = time.time()
 
 with open(metadata) as metadata_file:
+    counter = 1
     for line in metadata_file:
         content = line.strip().split(',')
         if content[0] != 'event_id':
@@ -31,14 +35,31 @@ with open(metadata) as metadata_file:
                 path_signal_N = os.path.join(earthquake_data, '%s_NNA_N.mseed' % data['id'])
                 path_signal_Z = os.path.join(earthquake_data, '%s_NNA_Z.mseed' % data['id'])
                 #
-                data['signal_E'] = obspy.read(path_signal_E)[0].data
-                data['signal_N'] = obspy.read(path_signal_N)[0].data
-                data['signal_Z'] = obspy.read(path_signal_Z)[0].data
+                N_fft=512
 
-                if len(data['signal_E']) and len(data['signal_N']) and len(data['signal_Z']) == 12000:
+                se = obspy.read(path_signal_E)
+                se.filter("bandpass", freqmin=1.0, freqmax=15.0, zerophase=True, corners=128)
+                data['signal_E'] = se[0].data
+                _, data['signal_E_welch'] = signal.welch(se[0].data, 20.0, window='hamming', nperseg=N_fft, noverlap=N_fft*75//100)
+
+                sn = obspy.read(path_signal_N)
+                sn.filter("bandpass", freqmin=1.0, freqmax=15.0, zerophase=True, corners=128)
+                data['signal_N'] = sn[0].data
+                _, data['signal_N_welch'] = signal.welch(sn[0].data, 20.0, window='hamming', nperseg=N_fft, noverlap=N_fft*75//100)
+
+                sz = obspy.read(path_signal_Z)
+                sz.filter("bandpass", freqmin=1.0, freqmax=15.0, zerophase=True, corners=128)
+                data['signal_Z'] = sz[0].data
+                _, data['signal_Z_welch'] = signal.welch(sz[0].data, 20.0, window='hamming', nperseg=N_fft, noverlap=N_fft*75//100)
+
+                if len(data['signal_E_welch']) and len(data['signal_N_welch']) and len(data['signal_Z_welch']) == FEATURES:
                     dataset.append(data)
+                    counter += 1
             except:
                 pass
+
+            finally:
+                if counter > N: break
 
 print('Dataset read (Time: %.3fs)' % (time.time() - checkpoint))
 print('Number of samples: %d' % (len(dataset)))
@@ -77,8 +98,8 @@ def perform_holdout():
     X = list()
     Y = list()
 
-    for data in dataset[:1000]:
-        X.append(data['signal_E'])
+    for data in dataset[:N]:
+        X.append(data['signal_E_welch'])
         Y.append(data['magnitude'])
 
     X = numpy.array(X)
@@ -91,8 +112,8 @@ def perform_holdout():
 
     def baseline_mlp():
         model = Sequential()
-        model.add(Dense(1000, input_dim=12000, kernel_initializer='normal', activation='relu'))
-        model.add(Dense(100, kernel_initializer='normal', activation='relu'))
+        model.add(Dense(50, input_dim=FEATURES, kernel_initializer='normal', activation='relu'))
+        model.add(Dense(20, kernel_initializer='normal', activation='relu'))
         model.add(Dense(10, kernel_initializer='normal', activation='relu'))
         model.add(Dense(1, kernel_initializer='normal'))
         model.compile(loss='mean_squared_error', optimizer='adam')
@@ -100,17 +121,20 @@ def perform_holdout():
     
     def baseline_lstm():
         model = Sequential()
-        model.add(LSTM(4, input_shape=(12000, 1)))
+        model.add(LSTM(4, input_shape=(FEATURES, 1)))
         model.add(Dense(1))
         model.compile(loss='mean_squared_error', optimizer='adam')
         return model
 
     seed = 7
     numpy.random.seed(seed)
-    estimator = KerasRegressor(build_fn=baseline_mlp, epochs=100, batch_size=10, verbose=1)
+    estimator = KerasRegressor(build_fn=baseline_mlp, epochs=100, batch_size=1, verbose=1)
 
     kfold = KFold(n_splits=10, random_state=seed)
     results = cross_val_score(estimator, X, Y, cv=kfold, verbose=1)
     print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
 
 perform_holdout()
+
+# for i, _ in enumerate(dataset):
+#     plot_signal(index=i)
