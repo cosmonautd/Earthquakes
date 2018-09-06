@@ -108,7 +108,7 @@ def perform_holdout():
     # scaler = MinMaxScaler(feature_range=(0, 1))
     # X = scaler.fit_transform(X)
 
-    # X = numpy.reshape(X, (X.shape[0], X.shape[1], 1))
+    X = numpy.reshape(X, (X.shape[0], X.shape[1], 1))
 
     def baseline_mlp():
         model = Sequential()
