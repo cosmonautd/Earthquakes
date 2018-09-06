@@ -84,10 +84,10 @@ def perform_holdout():
     X = numpy.array(X)
     Y = numpy.array(Y)
 
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    X = scaler.fit_transform(X)
+    # scaler = MinMaxScaler(feature_range=(0, 1))
+    # X = scaler.fit_transform(X)
 
-    X = numpy.reshape(X, (X.shape[0], X.shape[1], 1))
+    # X = numpy.reshape(X, (X.shape[0], X.shape[1], 1))
 
     def baseline_mlp():
         model = Sequential()
@@ -107,7 +107,7 @@ def perform_holdout():
 
     seed = 7
     numpy.random.seed(seed)
-    estimator = KerasRegressor(build_fn=baseline_lstm, epochs=100, batch_size=10, verbose=1)
+    estimator = KerasRegressor(build_fn=baseline_mlp, epochs=100, batch_size=10, verbose=1)
 
     kfold = KFold(n_splits=10, random_state=seed)
     results = cross_val_score(estimator, X, Y, cv=kfold, verbose=1)
