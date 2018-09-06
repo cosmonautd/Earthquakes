@@ -128,7 +128,7 @@ def perform_holdout():
 
     seed = 7
     numpy.random.seed(seed)
-    estimator = KerasRegressor(build_fn=baseline_mlp, epochs=100, batch_size=1, verbose=1)
+    estimator = KerasRegressor(build_fn=baseline_lstm, epochs=50, batch_size=1, verbose=1)
 
     kfold = KFold(n_splits=10, random_state=seed)
     results = cross_val_score(estimator, X, Y, cv=kfold, verbose=1)
